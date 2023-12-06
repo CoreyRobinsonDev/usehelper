@@ -88,27 +88,138 @@ export type Options = {
     priority?: high | low | auto;
 }
 
-export default function useFetch<T>({url, options} : {url: string, options?: Options}) {
+
+export default function useFetch<T>(url: string, options?: Options):
+[typeof request, typeof response] {
     const [res, setRes] = useState<T | null>();
     const [err, setErr] = useState<string | null>();
-    const [isPending, setIsPending] = useState(true);
+    const [status, setStatus] = useState<number>();
+    const [hasError, setHasError] = useState<boolean>();
+    const [isPending, setIsPending] = useState<boolean>();
 
-    fetch(url, options)
-        .then(r => r.json())
-        .then(data => {
-            setRes(data);
-            setErr(null);
+    const request = {
+        addParameters: function(parameters: Object) {
+            let paramString = "?" + url.split("?")[1];
+
+            for (const entry of Object.entries(parameters)) {
+                if (!paramString) {
+                    paramString = `?${entry[0]}=${entry[1]}`;
+                } else {
+                    paramString += `&${entry[0]}=${entry[1]}`;
+                }
+            }
+            url += url.split("?") + paramString;
+            return this;
+        },
+        call: async () => {
+            setIsPending(true);
+            const resp = await fetch(url, options);
+
+            if (resp.status >= 200 && resp.status <= 299) {
+                setErr(null);
+                setHasError(false);
+                setRes(await resp.json());
+            } else {
+                setErr(resp.statusText ? resp.statusText : errorCodeResponse(resp.status));
+                setHasError(true);
+                setRes(null);
+            }
+
+            setStatus(resp.status);
             setIsPending(false);
-        })
-        .catch(e => {
-            setErr(e);
-            setRes(null);
-            setIsPending(false);
-        })
-    return [res, isPending, err];
+        }
+    }
+
+    const response = {
+        data: res,
+        error: err,
+        status,
+        hasError,
+        isPending,
+        toString: () => JSON.stringify(res),
+    }
+
+    return [request, response];
 }
 
-function optionsBuilder(options: Options): Options | null {
-    if (!options) return null;
-    return null;
+type ErrorCodeResponse =  
+    "Bad Request" |
+    "Unauthorized"|
+    "Payment Required"|
+    "Forbidden"|
+    "Not Found"|
+    "Method Not Allowed"|
+    "Not Acceptable"|
+    "Proxy Authentication Required"|
+    "Request Timeout"|
+    "Conflict"|
+    "Gone"|
+    "Length Required"|
+    "Precondition Failed"|
+    "Payload Too Large"|
+    "URI Too Long"|
+    "Unsupported Media Type"|
+    "Range Not Satisfiable"|
+    "Expectation Failed"|
+    "I'm a teapot"|
+    "Unprocessable Entity"|
+    "Too Early"|
+    "Upgrade Required"|
+    "Precondition Required"|
+    "Too Many Requests"|
+    "Request Header Fields Too Large"|
+    "Unavailable For Legal Reasons"|
+    "Internal Server Error"|
+    "Not Implemented"|
+    "Bad Gateway"|
+    "Service Unavailable"|
+    "Gateway Timeout"|
+    "HTTP Version Not Supported"|
+    "Variant Also Negotiates"|
+    "Insufficient Storage"|
+    "Loop Detected"|
+    "Not Extended"|
+    "Network Authentication Required"
+
+function errorCodeResponse(errorCode: number): ErrorCodeResponse  | "Unrecognizable Error Has Occurred" {
+    switch(errorCode) {
+        case 400: return "Bad Request";
+        case 401: return "Unauthorized";
+        case 402: return "Payment Required";
+        case 403: return "Forbidden";
+        case 404: return "Not Found";
+        case 405: return "Method Not Allowed";
+        case 406: return "Not Acceptable";
+        case 407: return "Proxy Authentication Required";
+        case 408: return "Request Timeout";
+        case 409: return "Conflict";
+        case 410: return "Gone";
+        case 411: return "Length Required";
+        case 412: return "Precondition Failed";
+        case 413: return "Payload Too Large";
+        case 414: return "URI Too Long";
+        case 415: return "Unsupported Media Type";
+        case 416: return "Range Not Satisfiable";
+        case 417: return "Expectation Failed";
+        case 418: return "I'm a teapot";
+        case 422: return "Unprocessable Entity";
+        case 425: return "Too Early";
+        case 426: return "Upgrade Required";
+        case 428: return "Precondition Required";
+        case 429: return "Too Many Requests";
+        case 431: return "Request Header Fields Too Large";
+        case 451: return "Unavailable For Legal Reasons";
+        case 500: return "Internal Server Error";
+        case 501: return "Not Implemented";
+        case 502: return "Bad Gateway";
+        case 503: return "Service Unavailable";
+        case 504: return "Gateway Timeout";
+        case 505: return "HTTP Version Not Supported";
+        case 506: return "Variant Also Negotiates";
+        case 507: return "Insufficient Storage";
+        case 508: return "Loop Detected";
+        case 510: return "Not Extended";
+        case 511: return "Network Authentication Required";
+        default: return "Unrecognizable Error Has Occurred";
+    }
 }
